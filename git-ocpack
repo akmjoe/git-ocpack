@@ -1,0 +1,248 @@
+#!/bin/bash
+
+usage() {
+    echo "usage: git ocpack [-d <path-to-destination>] [-p | -q]"
+    echo -e "Options:"
+    echo -e "\e[1m-p\e[0m Convert to ocmod"
+    echo -e "\e[1m-q\e[0m Convert to vqmod"
+    echo -e "\e[1m-h\e[0m Show this help"
+    echo -e "\e[1m-v\e[0m Show version"
+    echo "If destination is not specified, it will be prompted for."
+    echo "The extension will be set automatically."
+}
+
+version() {
+    echo "git ocpack plugin v0.1.0"
+    echo
+}
+
+prepareoc() {
+	tmp_dir=$(mktemp -d -t oc-XXXXXXXXXX)
+	if [ -d "upload/vqmod/xml" ]; then
+		echo "Found vqmod folder..."
+		for f in upload/vqmod/xml/*; do
+		   if [[ $(basename $f) == *.xml ]]; then
+				a[${#a[@]}]="$f";
+				echo "Found file $(basename $f)";
+			fi
+		done
+		if [ -f "install.xml" ]; then
+			echo "Found file install.xml"
+			a+=("install.xml")
+		fi
+		echo "${#a[@]} files found..."
+		if [ "${#a[@]}" == 0 ]; then
+			echo "No install.xml file or vqmod/xml/*.xml file found!"
+			return 1
+		elif [ ${#a[@]} -gt 1 ]; then
+			echo "Too many xml files, cannot create ocmod plugin!"
+			return 1
+		fi
+	else
+		if [ -f "install.xml" ]; then
+			echo "Found file install.xml"
+			a+=("install.xml")
+		else
+			echo "No install.xml file or vqmod/xml/*.xml file found!"
+			return 1
+		fi
+	fi
+	# if we are here, have 1 and only 1 xml file
+	$(cp "$a" "$tmp_dir/install.xml")
+	error=0
+	# validate xml file structure
+	if [ $(which xmllint) ]; then
+		# Check xml file for required info
+		tst=$(xmllint --xpath 'string(/modification/name)' "$a")
+		if [ -z "$tst" ]; then
+			echo -e "\e[1mWarning:\e[0m No name node found in xml file!"
+		fi
+		tst=$(xmllint --xpath 'string(/modification/version)' "$a")
+		if [ -z "$tst" ]; then
+			echo -e "\e[1mWarning:\e[0m No version node found in xml file!"
+		fi
+		tst=$(xmllint --xpath 'string(/modification/author)' "$a")
+		if [ -z "$tst" ]; then
+			echo -e "\e[1mWarning:\e[0m No author node found in xml file!"
+		fi
+		tst=$(xmllint --xpath 'string(/modification/code)' "$a")
+		if [ -z "$tst" ]; then
+			echo -e "\e[1mWarning:\e[0m code in xml file is required!"
+			error=1
+		fi
+	else
+		echo -e "xml file not checked. To enable xml file checking, please install \e[1mxmllint\e[0m"
+	fi
+	# Now check directory structure for invalid paths
+	# build list of allowed paths
+	allowed=("admin/controller/extension/"
+		"admin/language/"
+		"admin/model/extension/"
+		"admin/view/image/"
+		"admin/view/javascript/"
+		"admin/view/stylesheet/"
+		"admin/view/template/extension/"
+		"catalog/controller/extension/"
+		"catalog/language/"
+		"catalog/model/extension/"
+		"catalog/view/javascript/"
+		"catalog/view/theme/"
+		"system/config/"
+		"system/library/"
+		"image/catalog/"
+	)
+	# check list of files
+	for f in $(find ./upload/. -type f -not -path "*./vqmod/*"); do
+		f=${f#"./upload/./"}
+		alwd=false
+		for p in "${allowed[@]}"; do
+			if [[ "$f" = $p* ]]; then
+				alwd=true
+			fi
+		done
+		if [ "$alwd" == false ]; then
+			echo -e "\e[1mWarning:\e[0m $f is not in the allowed path!"
+			error=1
+		fi
+	done
+	if [ $error -eq 1 ]; then
+		echo "Errors found, cannot continue. Abort."
+		return 1
+	fi
+	# Checking complete, now copy files
+	
+	if [ -d "upload" ]; then
+		cp -r upload "$tmp_dir"
+	fi
+	# Now copy any files in this directory
+	cp * "$tmp_dir"
+	# remove vqmod if it exists
+	rm -r "$tmp_dir/upload/vqmod"
+	return 0
+}
+
+preparevq() {
+	tmp_dir=$(mktemp -d -t oc-XXXXXXXXXX)
+	mkdir -p "$tmp_dir/upload"
+	error=0
+	if [ -f "install.xml" ]; then
+		echo "Found file install.xml, moving it to vqmod..."
+		name=${PWD##*/}
+		if [ -f "vqmod/xml/$name.xml" ]; then
+			echo "file vqmod/xml/$name.xml exists, cannot copy install file!"
+			error=1
+		else
+			mkdir -p "$tmp_dir/upload/vqmod/xml"
+			cp install.xml "$tmp_dir/upload/vqmod/xml/$name.xml"
+		fi
+	fi
+	if [ -d "upload" ]; then
+		cp -r upload "$tmp_dir"
+	fi
+	# Now copy any files in this directory
+	cp * "$tmp_dir"
+	# remove install.xml if it exists
+	rm "$tmp_dir/install.xml"
+	return $error
+}
+
+pack() {
+	if [ "$1" == .ocmod.zip ]; then
+		mode=0
+	else
+		mode=1
+	fi
+	tmp_dir=""
+	# Run pre-check
+	if [ "$mode" == 0 ]; then
+		echo "Validating ocmod"
+		prepareoc
+	else
+		echo "Validating vqmod"
+		preparevq
+	fi
+	if [ $? -eq 0 ] && [ "$tmp_dir" ] && [ -d "$tmp_dir" ]; then
+		echo "Succesfully prepared files, now creating zip archive..."
+		if [ -f $dest ]; then
+			# destination exists - remove it
+			rm $dest
+		fi
+		cd $tmp_dir;zip $dest -r ./
+	fi
+	if [ "$tmp_dir" ] && [ -d "$tmp_dir" ]; then
+		echo "Removing temporary files..."
+		rm -rf $tmp_dir
+		echo "Done."
+	fi
+}
+
+
+main() {
+ 	# Check parameters
+	while (( "$#" )); do
+		case $1 in
+			"-h"|"--help")
+				usage; exit 0
+				;;
+			"-v"|"--version")
+				version; exit 0
+				;;
+			"-d"|"--destination")
+				shift
+				(( "$#" )) && dest="$1"
+				;;
+			"-p"|"--ocmod")
+				echo "Create ocmod plugin..."
+				ext=".ocmod.zip"
+				;;
+			"-q"|"--vqmod")
+				echo "Create vqmod plugin..."
+				ext=".zip"
+				;;
+		esac
+		shift
+   done
+	# if we are here, create plugin file
+	
+	if [ -z "$ext" ]; then
+		# determine extension type
+		if [ -f "install.xml" ]; then
+			echo "Create ocmod plugin..."
+			ext=".ocmod.zip"
+		else
+			echo "Create vqmod plugin..."
+			ext=".zip"
+		fi
+	fi
+	if [ -z "$dest" ]; then
+		# No source specified
+		echo "Getting destination directory...";
+		name=${PWD##*/}
+		dest=`zenity --file-selection --save --file-filter="*$ext" --filename="$name$ext"`
+	else
+		# destination specified
+		if [[ "$dest" == *.zip ]]; then
+			echo "Destination is zip file, using extension to determine plugin type..."
+			if [[ "$dest" == *.ocmod.zip ]]; then
+				echo "Create ocmod plugin..."
+				ext=".ocmod.zip"
+			else
+				echo "Create vqmod plugin..."
+				ext=".zip"
+			fi
+		else
+			echo "Destination not zip file, generating plugin name..."
+				name=${PWD##*/}
+				dest="$dest/$name$ext"
+		fi
+	fi
+	if [ -z "$dest" ]; then
+		echo "Aborted."
+		exit 1
+	fi
+	echo "Destination is $dest"
+	# Now we have type and destination - go to packing function
+	pack "$ext" "$dest"
+}
+
+main "$@"
