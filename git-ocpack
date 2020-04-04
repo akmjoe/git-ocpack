@@ -18,6 +18,7 @@ version() {
 
 prepareoc() {
 	tmp_dir=$(mktemp -d -t oc-XXXXXXXXXX)
+	mkdir "$tmp_dir/upload"
 	if [ -d "upload/vqmod/xml" ]; then
 		echo "Found vqmod folder..."
 		for f in upload/vqmod/xml/*; do
@@ -48,24 +49,32 @@ prepareoc() {
 		fi
 	fi
 	# if we are here, have 1 and only 1 xml file
-	$(cp "$a" "$tmp_dir/install.xml")
+	cp "$a" "$tmp_dir/install.xml"
+	# convert as required
+	if [ "$a" != "install.xml" ]; then
+		echo "Converting xml file..."
+		convert.php "$a" "$tmp_dir/install.xml"
+	else
+		cp "$a" "$tmp_dir/install.xml"
+	fi
+	
 	error=0
 	# validate xml file structure
 	if [ $(which xmllint) ]; then
 		# Check xml file for required info
-		tst=$(xmllint --xpath 'string(/modification/name)' "$a")
+		tst=$(xmllint --xpath 'string(/modification/name)' "$tmp_dir/install.xml")
 		if [ -z "$tst" ]; then
 			echo -e "\e[1mWarning:\e[0m No name node found in xml file!"
 		fi
-		tst=$(xmllint --xpath 'string(/modification/version)' "$a")
+		tst=$(xmllint --xpath 'string(/modification/version)' "$tmp_dir/install.xml")
 		if [ -z "$tst" ]; then
 			echo -e "\e[1mWarning:\e[0m No version node found in xml file!"
 		fi
-		tst=$(xmllint --xpath 'string(/modification/author)' "$a")
+		tst=$(xmllint --xpath 'string(/modification/author)' "$tmp_dir/install.xml")
 		if [ -z "$tst" ]; then
 			echo -e "\e[1mWarning:\e[0m No author node found in xml file!"
 		fi
-		tst=$(xmllint --xpath 'string(/modification/code)' "$a")
+		tst=$(xmllint --xpath 'string(/modification/code)' "$tmp_dir/install.xml")
 		if [ -z "$tst" ]; then
 			echo -e "\e[1mWarning:\e[0m code in xml file is required!"
 			error=1
@@ -167,7 +176,7 @@ pack() {
 			# destination exists - remove it
 			rm $dest
 		fi
-		cd $tmp_dir;zip $dest -r ./
+		cd $tmp_dir;zip -q $dest -r ./ && echo "Zip created." || echo -e "\e[1mFailure creating zip file\e[0m"
 	fi
 	if [ "$tmp_dir" ] && [ -d "$tmp_dir" ]; then
 		echo "Removing temporary files..."

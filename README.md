@@ -7,15 +7,14 @@ Git plugin script to create an opencart plugin zip file from a git repository
 For this to work, the source that is being packed must have an `upload` folder
 containing files in the correct directory structure to upload to opencart.
 
-If there is a `vqmod` folder, it cannot be used as a .ocmod.zip plugin.
-
 ### Prerequisites
 
 Intended for use on a linux system with bash. Not tested on windows.
+For converting vqmod to ocmod, php-cli must be enabled.
 
 ### Installing
 
-Copy git-ocpack file to your bin folder and make sure it is executable.
+Copy git-ocpack and convert.php files to your bin folder and make sure they are executable.
 
 ### Usage
 Open the terminal in the git directory you want to pack,
