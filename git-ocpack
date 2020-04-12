@@ -1,8 +1,9 @@
 #!/bin/bash
 
 usage() {
-    echo "usage: git ocpack [-d <path-to-destination>] [-p | -q]"
+    echo "usage: git ocpack [-d <path-to-destination>] [-p | -q | -i]"
     echo -e "Options:"
+    echo -e "\e[1m-i\e[0m Initialize ocmod structure"
     echo -e "\e[1m-p\e[0m Convert to ocmod"
     echo -e "\e[1m-q\e[0m Convert to vqmod"
     echo -e "\e[1m-h\e[0m Show this help"
@@ -19,7 +20,7 @@ version() {
 prepareoc() {
 	tmp_dir=$(mktemp -d -t oc-XXXXXXXXXX)
 	mkdir "$tmp_dir/upload"
-	if [ -d "upload/vqmod/xml" ]; then
+	if [ -d "upload/vqmod/xml" ] && [ ! -f "install.xml" ]; then
 		echo "Found vqmod folder..."
 		for f in upload/vqmod/xml/*; do
 		   if [[ $(basename $f) == *.xml ]]; then
@@ -155,6 +156,54 @@ preparevq() {
 	return $error
 }
 
+init() {
+	if [ ! -d "upload" ]; then
+		echo "Creating upload folder..."
+		mkdir upload
+	fi
+	if [ -d "upload/vqmod/xml" ] && [ ! -f "install.xml" ]; then
+		echo "Found vqmod folder..."
+		for f in upload/vqmod/xml/*; do
+		   if [[ $(basename $f) == *.xml ]]; then
+				a[${#a[@]}]="$f";
+				echo "Found file $(basename $f)";
+			fi
+		done
+		if [ "${#a[@]}" -eq 1 ]; then
+			file="$a"
+		elif [ ${#a[@]} -gt 1 ]; then
+			while [ -z $file ] || [ ! -f $file ]; do
+				read -e -p "Please select file to convert to install.xml:" -i "$a" file;
+				if [ ! -f $file ]; then
+					echo "Invalid file name!"
+				fi
+			done
+		fi
+		if [ ! -z $file ]; then
+			# Convert to install.xml
+			echo "Converting $file to install.xml..."
+			convert.php "$file" "install.xml"
+			return
+		fi
+	fi
+	if [ ! -f "install.xml" ]; then
+		touch install.xml
+		echo "<?xml version="1.0" encoding="utf-8"?>" > install.xml
+		echo "<modification>" >> install.xml
+		read -p "Module Name:" name;
+		read -e -p "Module Version:" -i "0.1" version;
+		read -e -p "Module Author:" -i "$(git config user.name)" author;
+		read -e -p "Link:" -i "$(git config user.site)" link;
+		read -e -p "Short Code:" -i "${PWD##*/}" code;
+		echo "	<name>$name</name>" >> install.xml
+		echo "	<version>$version</version>" >> install.xml
+		echo "	<author>$author</author>" >> install.xml
+		echo "	<link>$link</link>" >> install.xml
+		echo "	<code>$code</code>" >> install.xml
+		echo "</modification>" >> install.xml
+	fi
+}
+
 pack() {
 	if [ "$1" == .ocmod.zip ]; then
 		mode=0
@@ -199,6 +248,10 @@ main() {
 			"-d"|"--destination")
 				shift
 				(( "$#" )) && dest="$1"
+				;;
+			"-i"|"--initialize")
+				echo "Initialize ocmod plugin..."
+				init; exit 0
 				;;
 			"-p"|"--ocmod")
 				echo "Create ocmod plugin..."

@@ -21,6 +21,7 @@ Open the terminal in the git directory you want to pack,
 and run the command `git ocpack`.
 
 Takes the following optional parameters:
+* `-i` Initialize ocmod
 * `-p` Convert vqmod to ocmod
 * `-q` Convert ocmod to vqmod
 * `-d <path-to-destination>` Where to save the .ocmod.zip file
@@ -34,8 +35,10 @@ be converted to the install.xml file required for a ocmod plugin.
 When using the `-q` option, the [install.xml] file will be moved to the vqmod folder
 and renamed to the project name.
 
-When generating a ocmod plugin, the directory structure will be pre-checked for any 
+When generating a ocmod plugin, the directory structure will be pre-checked for any
 invalid folders. If any are found, it will notify and abort.
+
+The `-i` option will create an empty *upload* folder and prompt for values to create the install.xml file.
 
 ## Authors
 

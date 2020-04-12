@@ -47,7 +47,14 @@ foreach($dom->xpath('//search') as $key => $node) {
     if(isset($node['offset']) && !isset($dom->xpath('//add')[$key]['offset'])) {
         $dom->xpath('//add')[$key]->addAttribute('offset', $node['offset']);
     }
-    if(isset($node['index'])) echo "Warning: index attribute may not work as expected!\n";
+    if(isset($node['index']) && strtoupper($node['index']) != "FALSE") {
+		  // Must reduce index by 1
+		  $index = explode(',',$node['index']);
+		  foreach($index as &$val) {
+		  	   $val--;
+		  }
+		  $node['index'] = implode(',', $index);
+    }
     unset($node['position']);
     unset($node['trim']);
     unset($node['offset']);
@@ -60,6 +67,12 @@ foreach($dom->xpath('//add') as $key => $node) {
         $error = true;
         echo $node['position']." is not a valid position!\n";
     }
+}
+foreach($dom->xpath('//operation') as $key => $node) {
+	if(!isset($node['error']) || $node['error'] != 'abort') {
+		// default to skip
+		$node['error'] = 'skip';
+	}
 }
 if($error) {
     echo "Errors found, abort.\n";
